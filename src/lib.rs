@@ -1,3 +1,12 @@
+
+// Thanks to serde: <https://github.com/serde-rs/serde/blob/master/serde/src/lib.rs>
+#[cfg(feature = "derive")]
+//#[allow(unused_imports)]
+extern crate iced_focus_derive;
+#[cfg(feature = "derive")]
+#[doc(hidden)]
+pub use iced_focus_derive::*;
+
 pub trait Focus {
     fn focus(&mut self, direction: Direction) -> State;
     fn has_focus(&self) -> bool;

@@ -2,7 +2,7 @@ use iced::{
     executor, text_input, Application, Column, Container, Length, Settings, Subscription, TextInput,
 };
 use iced_focus::Focus;
-use iced_focus_derive::Focus;
+//use iced_focus_derive::Focus;
 
 #[derive(Default, Focus)]
 struct TextInputFocusExample {

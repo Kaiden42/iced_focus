@@ -5,11 +5,24 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[test]]
+name = "tests"
+path = "tests/collection.rs"
+
 [dependencies]
 iced = "0.3.0"
+iced_focus_derive = {path = "./iced_focus_derive", optional = true}
+
+[dev-dependencies]
+trybuild = "1.0.43"
+
+[features]
+derive = ["iced_focus_derive"]
 
 [workspace]
 members = [
     "iced_focus_derive",
+    "examples/derive",
+    "examples/enums",
     "examples/text_input",
 ]
