@@ -9,14 +9,23 @@ enum Example {
 
 fn main() {
     let mut example = Example::One;
-    assert_eq!(example.focus(iced_focus::Direction::Forwards), iced_focus::State::Ignored);
+    assert_eq!(
+        example.focus(iced_focus::Direction::Forwards),
+        iced_focus::State::Ignored
+    );
     assert!(!example.has_focus());
 
     example = Example::Two;
-    assert_eq!(example.focus(iced_focus::Direction::Forwards), iced_focus::State::Ignored);
+    assert_eq!(
+        example.focus(iced_focus::Direction::Forwards),
+        iced_focus::State::Ignored
+    );
     assert!(!example.has_focus());
 
     example = Example::Three;
-    assert_eq!(example.focus(iced_focus::Direction::Forwards), iced_focus::State::Ignored);
+    assert_eq!(
+        example.focus(iced_focus::Direction::Forwards),
+        iced_focus::State::Ignored
+    );
     assert!(!example.has_focus());
 }

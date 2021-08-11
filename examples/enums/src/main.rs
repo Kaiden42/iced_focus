@@ -1,4 +1,7 @@
-use iced::{Application, Button, Column, Container, Element, Length, Row, Sandbox, Settings, Subscription, Text, TextInput, button, executor, text_input};
+use iced::{
+    button, executor, text_input, Application, Button, Column, Container, Element, Length, Row,
+    Sandbox, Settings, Subscription, Text, TextInput,
+};
 use iced_focus::Focus;
 //use iced_focus_derive::Focus;
 
@@ -37,7 +40,7 @@ impl Application for EnumsExample {
                 button_two: button::State::new(),
                 enum_state: EnumState::None,
             },
-            iced::Command::none()
+            iced::Command::none(),
         )
     }
 
@@ -100,11 +103,20 @@ impl Application for EnumsExample {
                 .push(
                     Row::new()
                         .spacing(5)
-                        .push(Button::new(&mut self.button_none, Text::new("None")).on_press(Message::Show(EnumVariant::None)))
-                        .push(Button::new(&mut self.button_one, Text::new("One")).on_press(Message::Show(EnumVariant::One)))
-                        .push(Button::new(&mut self.button_two, Text::new("Two")).on_press(Message::Show(EnumVariant::Two)))
+                        .push(
+                            Button::new(&mut self.button_none, Text::new("None"))
+                                .on_press(Message::Show(EnumVariant::None)),
+                        )
+                        .push(
+                            Button::new(&mut self.button_one, Text::new("One"))
+                                .on_press(Message::Show(EnumVariant::One)),
+                        )
+                        .push(
+                            Button::new(&mut self.button_two, Text::new("Two"))
+                                .on_press(Message::Show(EnumVariant::Two)),
+                        ),
                 )
-                .push(content)
+                .push(content),
         )
         .center_x()
         .center_y()
@@ -162,9 +174,17 @@ impl EnumState {
     pub fn view(&mut self) -> Element<'_, Message> {
         match self {
             EnumState::None => Column::new(),
-            EnumState::One { one, text_input_one } => Column::new()
+            EnumState::One {
+                one,
+                text_input_one,
+            } => Column::new()
                 .push(TextInput::new(text_input_one, "One", one, Message::One).padding(5)),
-            EnumState::Two { one, text_input_one, two, text_input_two } => Column::new()
+            EnumState::Two {
+                one,
+                text_input_one,
+                two,
+                text_input_two,
+            } => Column::new()
                 .push(TextInput::new(text_input_one, "One", one, Message::One).padding(5))
                 .push(TextInput::new(text_input_two, "One", two, Message::Two).padding(5)),
         }

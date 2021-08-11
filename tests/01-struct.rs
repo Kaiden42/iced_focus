@@ -14,18 +14,27 @@ fn main() {
     assert!(!example.has_focus());
     assert!(!example.text_input_one.has_focus());
     assert!(!example.text_input_two.has_focus());
-    
-    assert_eq!(example.focus(iced_focus::Direction::Forwards), iced_focus::State::Kept);
+
+    assert_eq!(
+        example.focus(iced_focus::Direction::Forwards),
+        iced_focus::State::Kept
+    );
     assert!(example.has_focus());
     assert!(example.text_input_one.has_focus());
     assert!(!example.text_input_two.has_focus());
-    
-    assert_eq!(example.focus(iced_focus::Direction::Forwards), iced_focus::State::Kept);
+
+    assert_eq!(
+        example.focus(iced_focus::Direction::Forwards),
+        iced_focus::State::Kept
+    );
     assert!(example.has_focus());
     assert!(!example.text_input_one.has_focus());
     assert!(example.text_input_two.has_focus());
-    
-    assert_eq!(example.focus(iced_focus::Direction::Forwards), iced_focus::State::Returned);
+
+    assert_eq!(
+        example.focus(iced_focus::Direction::Forwards),
+        iced_focus::State::Returned
+    );
     assert!(!example.has_focus());
     assert!(!example.text_input_one.has_focus());
     assert!(!example.text_input_two.has_focus());

@@ -42,7 +42,7 @@ fn impl_focus_struct(ident: &syn::Ident, s: &syn::DataStruct) -> TokenStream {
 
 fn build_focus_trait_for_struct<'a>(ident: &syn::Ident, fields: &[FocusField<'a>]) -> TokenStream {
     let vector_name = quote! {fields};
-    let focus_method_body = build_focus_method_body(&vector_name, fields, true);
+    let focus_method_body = build_focus_method_body(0, &vector_name, fields, true);
     let has_focus_method_body = build_has_focus_method_body(fields, true);
 
     let result = quote! {
@@ -64,15 +64,48 @@ fn impl_focus_enum(ident: &syn::Ident, e: &syn::DataEnum) -> TokenStream {
 
     let variants = &e.variants;
 
-    let method_bodies: Vec<(proc_macro2::TokenStream, proc_macro2::TokenStream)> = variants.iter()
-        .map(|variant| impl_focus_enum_variant(variant)).collect();
+    let method_bodies: Vec<(proc_macro2::TokenStream, proc_macro2::TokenStream)> = variants
+        .iter()
+        .enumerate()
+        .map(|(index, variant)| impl_focus_enum_variant(index, variant))
+        .collect();
 
     let focus_bodies = method_bodies.iter().map(|(focus, _)| focus);
     let has_focus_bodies = method_bodies.iter().map(|(_, has_focus)| has_focus);
 
+    // TODO: clean this up.
+    let booleans: Vec<proc_macro2::TokenStream> = variants
+        .iter()
+        .enumerate()
+        .map(|(index, variant)| {
+            let fields = match variant.fields {
+                syn::Fields::Named(ref named) => FocusField::collect_fields_named(named),
+                syn::Fields::Unnamed(ref unnamed) => FocusField::collect_fields_unnamed(unnamed),
+                syn::Fields::Unit => Vec::new(),
+            };
+
+            let booleans = fields
+                .iter()
+                .map(|field| (field.index, &field.attribute))
+                .map(|(field_index, attribute)| match attribute {
+                    FocusAttribute::Enable(_) => None,
+                    FocusAttribute::EnableWith(_, _) => {
+                        Some(attribute.to_boolean_expression(field_index, Some(index)))
+                    }
+                })
+                .flatten();
+
+            quote! {
+                #(#booleans)*
+            }
+        })
+        .collect();
+
     let result = quote! {
         impl iced_focus::Focus for #ident {
             fn focus(&mut self, direction: iced_focus::Direction) -> iced_focus::State {
+                #(#booleans)*
+
                 match self {
                     #(#focus_bodies)*
                 }
@@ -88,7 +121,10 @@ fn impl_focus_enum(ident: &syn::Ident, e: &syn::DataEnum) -> TokenStream {
     result.into()
 }
 
-fn impl_focus_enum_variant(variant: &syn::Variant) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+fn impl_focus_enum_variant(
+    index: usize,
+    variant: &syn::Variant,
+) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
     let ident = &variant.ident;
     let vector_name = quote! {fields};
 
@@ -98,20 +134,22 @@ fn impl_focus_enum_variant(variant: &syn::Variant) -> (proc_macro2::TokenStream,
         syn::Fields::Unit => Vec::new(),
     };
 
-    let field_idents: Vec<proc_macro2::TokenStream> = fields.iter().map(|field| field.ident(false)).collect();
-    let focus_method_body = build_focus_method_body(&vector_name, &fields, false);
+    let field_idents: Vec<proc_macro2::TokenStream> =
+        fields.iter().map(|field| field.ident(false)).collect();
+    let focus_method_body = build_focus_method_body(index, &vector_name, &fields, false);
     let has_focus_method_body = build_has_focus_method_body(&fields, false);
 
     let variant_fields = match variant.fields {
         syn::Fields::Named(_) => quote! { {#(#field_idents,)* ..} },
         syn::Fields::Unnamed(ref unnamed) => {
-            let idents = (0..unnamed.unnamed.len()).into_iter()
+            let idents = (0..unnamed.unnamed.len())
+                .into_iter()
                 .map(|i| syn::Ident::new(&format!("t_{}", i), proc_macro2::Span::call_site()));
             quote! { (#(#idents,)*) }
-        },
+        }
         syn::Fields::Unit => quote! {},
     };
-    
+
     let focus_method_body = quote! {
         Self::#ident #variant_fields => {
             #focus_method_body
@@ -127,30 +165,35 @@ fn impl_focus_enum_variant(variant: &syn::Variant) -> (proc_macro2::TokenStream,
     (focus_method_body, has_focus_method_body)
 }
 
-fn build_focus_method_body<'a>(vector_name: &proc_macro2::TokenStream, fields: &[FocusField<'a>], with_self: bool) -> proc_macro2::TokenStream {
+fn build_focus_method_body<'a>(
+    index: usize,
+    vector_name: &proc_macro2::TokenStream,
+    fields: &[FocusField<'a>],
+    with_self: bool,
+) -> proc_macro2::TokenStream {
     let capacity = fields.len();
-    let field_to_vector: Vec<proc_macro2::TokenStream> = fields.iter()
-        .map(|field| if with_self {
-            field.add_struct_field_to_vec(vector_name)
-        } else {
-            field.add_enum_field_to_vec(vector_name)
+    let field_to_vector: Vec<proc_macro2::TokenStream> = fields
+        .iter()
+        .map(|field| {
+            if with_self {
+                field.add_struct_field_to_vec(vector_name)
+            } else {
+                field.add_enum_field_to_vec(index, vector_name)
+            }
         })
         .collect();
-    let booleans: Vec<proc_macro2::TokenStream> = fields.iter()
-        .map(|field| {
-            match field.attribute {
-                FocusAttribute::Enable(_) => quote!{},
-                FocusAttribute::EnableWith(_, ref path) => {
-                    let boolean = syn::Ident::new(&format!("b_{}", field.index), proc_macro2::Span::call_site());
-                    quote! {
-                        let #boolean = #path();
-                    }
-                },
-            }
-        }).collect();
+    let booleans: Vec<proc_macro2::TokenStream> = if with_self {
+        fields
+            .iter()
+            .map(|field| field.attribute.to_boolean_expression(field.index, None))
+            .collect()
+    } else {
+        Vec::new()
+    };
 
-    quote!{
+    quote! {
         let mut #vector_name: std::vec::Vec<&mut dyn iced_focus::Focus> = std::vec::Vec::with_capacity(#capacity);
+        let mut #vector_name: std::vec::Vec<Box<&mut dyn iced_focus::Focus>> = std::vec::Vec::with_capacity(#capacity);
 
         #(#booleans)*
 
@@ -160,24 +203,28 @@ fn build_focus_method_body<'a>(vector_name: &proc_macro2::TokenStream, fields: &
     }
 }
 
-fn build_has_focus_method_body(fields: &[FocusField<'_>], with_self: bool) -> proc_macro2::TokenStream {
-    let field_idents: Vec<proc_macro2::TokenStream> = fields.iter()
-        .map(|field| field.ident(with_self))
+fn build_has_focus_method_body(
+    fields: &[FocusField<'_>],
+    with_self: bool,
+) -> proc_macro2::TokenStream {
+    let field_idents: Vec<proc_macro2::TokenStream> =
+        fields.iter().map(|field| field.ident(with_self)).collect();
+
+    let booleans: Vec<proc_macro2::TokenStream> = fields
+        .iter()
+        .map(|field| match field.attribute {
+            FocusAttribute::Enable(_) => quote! {},
+            FocusAttribute::EnableWith(_, ref path) => quote! {#path() &&},
+        })
         .collect();
 
-    let booleans: Vec<proc_macro2::TokenStream> = fields.iter()
-        .map(|field| match  field.attribute {
-            FocusAttribute::Enable(_) => quote!{},
-            FocusAttribute::EnableWith(_, ref path) => quote! {#path() &&},
-        }).collect();
- 
     let with_self = if with_self {
-        quote!{self.}
+        quote! {self.}
     } else {
-        quote!{}
+        quote! {}
     };
 
-    quote!{
+    quote! {
         #(#booleans #with_self#field_idents.has_focus() ||)* false
     }
 }
@@ -194,15 +241,18 @@ impl<'a> FocusField<'a> {
     fn collect_fields_named(fields_named: &'a syn::FieldsNamed) -> Vec<Self> {
         fields_named
             .named
-            .iter().enumerate()
+            .iter()
+            .enumerate()
             .map(|(index, field)| FocusField::from_field_if_annotated(field, index))
             .flatten()
             .collect()
     }
 
     fn collect_fields_unnamed(fields_unnamed: &'a syn::FieldsUnnamed) -> Vec<Self> {
-        fields_unnamed.unnamed
-            .iter().enumerate()
+        fields_unnamed
+            .unnamed
+            .iter()
+            .enumerate()
             .map(|(index, field)| FocusField::from_field_if_annotated(field, index))
             .flatten()
             .collect()
@@ -214,9 +264,9 @@ impl<'a> FocusField<'a> {
 
         attribute.map(|attribute| Self {
             ident: if let Some(ident) = field.ident.as_ref() {
-                quote!{#ident}
+                quote! {#ident}
             } else {
-                quote!{#index_literal}
+                quote! {#index_literal}
             },
             index,
             unnamed: field.ident.is_none(),
@@ -224,46 +274,57 @@ impl<'a> FocusField<'a> {
         })
     }
 
-    fn add_struct_field_to_vec(&self, vector_name: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+    fn add_struct_field_to_vec(
+        &self,
+        vector_name: &proc_macro2::TokenStream,
+    ) -> proc_macro2::TokenStream {
         let ident = self.ident(true);
         match self.attribute {
             FocusAttribute::Enable(_) => quote! {
-                #vector_name.push(&mut self.#ident);
+                #vector_name.push(Box::new(&mut self.#ident));
             },
             FocusAttribute::EnableWith(_, _) => {
-                let boolean = syn::Ident::new(&format!("b_{}", self.index), proc_macro2::Span::call_site());
+                let boolean =
+                    syn::Ident::new(&format!("b_{}", self.index), proc_macro2::Span::call_site());
                 quote! {
                     if #boolean {
-                        #vector_name.push(&mut self.#ident);
+                        #vector_name.push(Box::new(&mut self.#ident));
                     }
                 }
-            },
+            }
         }
-        
     }
 
-    fn add_enum_field_to_vec(&self, vector_name: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+    fn add_enum_field_to_vec(
+        &self,
+        index: usize,
+        vector_name: &proc_macro2::TokenStream,
+    ) -> proc_macro2::TokenStream {
         let ident = self.ident(false);
         //quote! {
         //    #vector_name.push(#ident);
         //}
         match self.attribute {
             FocusAttribute::Enable(_) => quote! {
-                #vector_name.push(#ident);
+                #vector_name.push(Box::new(#ident));
             },
             FocusAttribute::EnableWith(_, _) => {
-                let boolean = syn::Ident::new(&format!("b_{}", self.index), proc_macro2::Span::call_site());
+                let boolean = syn::Ident::new(
+                    &format!("b_{}_{}", index, self.index),
+                    proc_macro2::Span::call_site(),
+                );
                 quote! {
                     if #boolean {
-                        #vector_name.push(#ident);
+                        #vector_name.push(Box::new(#ident));
                     }
                 }
-            },
+            }
         }
     }
 
     fn ident(&self, with_self: bool) -> proc_macro2::TokenStream {
-        if !with_self && self.unnamed { // TODO: clean up
+        if !with_self && self.unnamed {
+            // TODO: clean up
             let tmp = syn::Ident::new(&format!("t_{}", self.ident), proc_macro2::Span::call_site());
             quote! {#tmp}
         } else {
@@ -284,10 +345,11 @@ impl<'a> FocusAttribute<'a> {
         let attr: Option<(&syn::PathSegment, syn::MetaList)> = attrs
             .iter()
             .map(|attr| {
-
                 let meta = match attr.parse_meta() {
                     Ok(syn::Meta::List(meta)) => meta,
-                    Ok(_) | Err(_) => panic!("Expected a meta list like `focus(enable ...)` for the focus attribute."),
+                    Ok(_) | Err(_) => panic!(
+                        "Expected a meta list like `focus(enable ...)` for the focus attribute."
+                    ),
                 };
 
                 (&attr.path, meta)
@@ -307,26 +369,58 @@ impl<'a> FocusAttribute<'a> {
 
             match meta.nested.pop().unwrap().into_value() {
                 syn::NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
-                    nv.path.get_ident()
-                        .filter(|ident| *ident == "enable").expect("Expected the ident `enable` inside the focus attribute.");
+                    nv.path
+                        .get_ident()
+                        .filter(|ident| *ident == "enable")
+                        .expect("Expected the ident `enable` inside the focus attribute.");
 
                     match nv.lit {
                         syn::Lit::Str(s) => {
                             let p: proc_macro2::TokenStream = syn::parse_str(&s.value()).unwrap();
 
                             FocusAttribute::EnableWith(&path.ident, p)
-                        },
-                        _ => panic!("Expected the path of `focus(enable = PATH) to be a `str` literal."),
+                        }
+                        _ => panic!(
+                            "Expected the path of `focus(enable = PATH) to be a `str` literal."
+                        ),
                     }
-                },
+                }
                 syn::NestedMeta::Meta(syn::Meta::Path(p)) => {
                     p.get_ident()
-                        .filter(|ident| *ident == "enable").expect("Expected the ident `enable` inside the focus attribute.");
+                        .filter(|ident| *ident == "enable")
+                        .expect("Expected the ident `enable` inside the focus attribute.");
 
                     FocusAttribute::Enable(&path.ident)
-                },
-                _ => panic!("The nested meta of the focus attribute must be `enable` or `enable = PATH`."),
+                }
+                _ => panic!(
+                    "The nested meta of the focus attribute must be `enable` or `enable = PATH`."
+                ),
             }
         })
+    }
+
+    fn to_boolean_expression(
+        &self,
+        field_index: usize,
+        variant_index: Option<usize>,
+    ) -> proc_macro2::TokenStream {
+        match self {
+            FocusAttribute::Enable(_) => quote! {},
+            FocusAttribute::EnableWith(_, ref path) => {
+                let boolean = match variant_index {
+                    Some(variant_index) => syn::Ident::new(
+                        &format!("b_{}_{}", variant_index, field_index),
+                        proc_macro2::Span::call_site(),
+                    ),
+                    None => syn::Ident::new(
+                        &format!("b_{}", field_index),
+                        proc_macro2::Span::call_site(),
+                    ),
+                };
+                quote! {
+                    let #boolean = #path();
+                }
+            }
+        }
     }
 }
