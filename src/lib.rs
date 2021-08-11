@@ -1,3 +1,49 @@
+//#![doc = include_str!("../README.md")]
+//! A proc-macro to derive a focus chain for Iced applications
+//! Take a look at the readme for more informations.
+#![deny(missing_docs)]
+#![deny(missing_debug_implementations)]
+#![deny(unused_results)]
+#![forbid(unsafe_code)]
+#![warn(
+    clippy::pedantic,
+    clippy::nursery,
+
+    // Restriction lints
+    clippy::clone_on_ref_ptr,
+    clippy::create_dir,
+    clippy::dbg_macro,
+    clippy::decimal_literal_representation,
+    clippy::exit,
+    clippy::float_cmp_const,
+    clippy::get_unwrap,
+    clippy::let_underscore_must_use,
+    clippy::map_err_ignore,
+    clippy::mem_forget,
+    clippy::missing_docs_in_private_items,
+    clippy::multiple_inherent_impl,
+    clippy::panic,
+    clippy::panic_in_result_fn,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::rest_pat_in_fully_bound_structs,
+    clippy::str_to_string,
+    clippy::string_to_string,
+    clippy::todo,
+    clippy::unimplemented,
+    clippy::unneeded_field_pattern,
+    clippy::unwrap_in_result,
+    clippy::unwrap_used,
+    clippy::use_debug,
+)]
+#![allow(
+    clippy::suboptimal_flops,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::module_name_repetitions
+)]
+
 // Thanks to serde: <https://github.com/serde-rs/serde/blob/master/serde/src/lib.rs>
 #[cfg(feature = "derive")]
 //#[allow(unused_imports)]
@@ -7,8 +53,11 @@ extern crate iced_focus_derive;
 #[doc(hidden)]
 pub use iced_focus_derive::*;
 
+/// This trait specifies an element in the applications state that can be addet to the focus chain.
 pub trait Focus {
+    /// Request a focus for the given direction.    
     fn focus(&mut self, direction: Direction) -> State;
+    /// True, if this element has the focus.
     fn has_focus(&self) -> bool;
 
     // Ugly workaround... see: <https://stackoverflow.com/a/61654763>
@@ -16,6 +65,7 @@ pub trait Focus {
     //fn as_dyn_mut(&mut self) -> &mut dyn Focus;
 }
 
+/// The state returned by the focus request on a focusable element.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum State {
     /// When the input keeps the focus.
@@ -42,16 +92,11 @@ impl Focus for iced::text_input::State {
     }
 }
 
-// TODO: reduce the amount of allocations needed.
 impl<T> Focus for Vec<T>
 where
     T: Focus,
 {
     fn focus(&mut self, direction: Direction) -> State {
-        //let mut vector: Vec<&mut dyn Focus> =
-        //    self.iter_mut().map(|t| t as &mut dyn Focus).collect();
-        ////vector.as_mut_slice().focus(direction)
-        //vector.focus(direction)
         self.as_mut_slice().focus(direction)
     }
 
@@ -96,8 +141,7 @@ impl<T: Focus> Focus for [T] {
         if let Some((index, _)) = self.iter().enumerate().find(|(_i, e)| e.has_focus()) {
             let state = self
                 .get_mut(index)
-                .map(|element| element.focus(direction))
-                .unwrap_or(State::Ignored);
+                .map_or(State::Ignored, |element| element.focus(direction));
 
             if state != State::Returned {
                 return state;
@@ -139,8 +183,7 @@ impl<T: Focus> Focus for [T] {
             };
 
             self.get_mut(beginning)
-                .map(|element| element.focus(direction))
-                .unwrap_or(State::Ignored)
+                .map_or(State::Ignored, |element| element.focus(direction))
         }
     }
 
@@ -151,18 +194,19 @@ impl<T: Focus> Focus for [T] {
 
 impl<T: Focus> Focus for Option<T> {
     fn focus(&mut self, direction: Direction) -> State {
-        self.as_mut()
-            .map(|t| t.focus(direction))
-            .unwrap_or(State::Ignored)
+        self.as_mut().map_or(State::Ignored, |t| t.focus(direction))
     }
 
     fn has_focus(&self) -> bool {
-        self.as_ref().map(|t| t.has_focus()).unwrap_or(false)
+        self.as_ref().map_or(false, |t| t.has_focus())
     }
 }
 
+/// The direction of the focus request.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Direction {
+    /// Request a forward focus on the focus chain.
     Forwards,
+    /// Request a backward focus on the focus chain.
     Backwards,
 }

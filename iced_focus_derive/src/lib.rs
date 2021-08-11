@@ -1,8 +1,51 @@
+//! A proc-macro to derive a focus chain for Iced applications
+//! Take a look at the readme for more informations.
+#![deny(missing_docs)]
+#![deny(missing_debug_implementations)]
+#![deny(unused_results)]
+#![forbid(unsafe_code)]
+#![warn(
+    clippy::pedantic,
+    clippy::nursery,
+
+    // Restriction lints
+    clippy::clone_on_ref_ptr,
+    clippy::create_dir,
+    clippy::dbg_macro,
+    clippy::decimal_literal_representation,
+    clippy::exit,
+    clippy::float_cmp_const,
+    clippy::get_unwrap,
+    clippy::let_underscore_must_use,
+    clippy::map_err_ignore,
+    clippy::mem_forget,
+    clippy::missing_docs_in_private_items,
+    clippy::multiple_inherent_impl,
+    clippy::panic_in_result_fn,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::rest_pat_in_fully_bound_structs,
+    clippy::str_to_string,
+    clippy::string_to_string,
+    clippy::todo,
+    clippy::unneeded_field_pattern,
+    clippy::use_debug,
+)]
+#![allow(
+    clippy::suboptimal_flops,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::module_name_repetitions,
+    clippy::missing_panics_doc
+)]
+
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use quote::quote;
 
+/// The starting point of the procedural macro.
 #[proc_macro_derive(Focus, attributes(focus))]
 pub fn focus_derive(input: TokenStream) -> TokenStream {
     // Construct a representation of Rust code as a syntax tree
@@ -13,6 +56,7 @@ pub fn focus_derive(input: TokenStream) -> TokenStream {
     impl_focus(&ast)
 }
 
+/// Implement the `Focus` trait for the given AST.
 fn impl_focus(ast: &syn::DeriveInput) -> TokenStream {
     //println!("ast: {:#?}", ast);
 
@@ -25,6 +69,7 @@ fn impl_focus(ast: &syn::DeriveInput) -> TokenStream {
     }
 }
 
+/// Implement the `Focus` trait for a struct.
 fn impl_focus_struct(ident: &syn::Ident, s: &syn::DataStruct) -> TokenStream {
     //println!("struct: {:#?}", s);
 
@@ -40,6 +85,7 @@ fn impl_focus_struct(ident: &syn::Ident, s: &syn::DataStruct) -> TokenStream {
     build_focus_trait_for_struct(ident, &fields)
 }
 
+/// Build the token stream of the trait implementation for a struct.
 fn build_focus_trait_for_struct<'a>(ident: &syn::Ident, fields: &[FocusField<'a>]) -> TokenStream {
     let vector_name = quote! {fields};
     let focus_method_body = build_focus_method_body(0, &vector_name, fields, true);
@@ -59,6 +105,7 @@ fn build_focus_trait_for_struct<'a>(ident: &syn::Ident, fields: &[FocusField<'a>
     result.into()
 }
 
+/// Implement the `Focus` trait for an enum.
 fn impl_focus_enum(ident: &syn::Ident, e: &syn::DataEnum) -> TokenStream {
     //println!("enum: {:#?}", e);
 
@@ -87,13 +134,12 @@ fn impl_focus_enum(ident: &syn::Ident, e: &syn::DataEnum) -> TokenStream {
             let booleans = fields
                 .iter()
                 .map(|field| (field.index, &field.attribute))
-                .map(|(field_index, attribute)| match attribute {
+                .filter_map(|(field_index, attribute)| match attribute {
                     FocusAttribute::Enable(_) => None,
                     FocusAttribute::EnableWith(_, _) => {
                         Some(attribute.to_boolean_expression(field_index, Some(index)))
                     }
-                })
-                .flatten();
+                });
 
             quote! {
                 #(#booleans)*
@@ -121,6 +167,7 @@ fn impl_focus_enum(ident: &syn::Ident, e: &syn::DataEnum) -> TokenStream {
     result.into()
 }
 
+/// Implement the `Focus` trait for a variant of an enum.
 fn impl_focus_enum_variant(
     index: usize,
     variant: &syn::Variant,
@@ -165,6 +212,7 @@ fn impl_focus_enum_variant(
     (focus_method_body, has_focus_method_body)
 }
 
+/// Build the `focus(&mut self, iced_focus::Direction) -> iced_focus::State` method of the `Focus` trait.
 fn build_focus_method_body<'a>(
     index: usize,
     vector_name: &proc_macro2::TokenStream,
@@ -203,6 +251,7 @@ fn build_focus_method_body<'a>(
     }
 }
 
+/// Build the `has_focus(&self) -> bool` method of the `Focus` trait.
 fn build_has_focus_method_body(
     fields: &[FocusField<'_>],
     with_self: bool,
@@ -229,35 +278,41 @@ fn build_has_focus_method_body(
     }
 }
 
+/// Represents a field annotated with `focus(enable...)`.
 #[derive(Debug)]
 struct FocusField<'a> {
+    /// The ident of the field.
     ident: proc_macro2::TokenStream,
+    /// The index of the field in the struct/enum.
     index: usize,
+    /// If the field is unnamed.
     unnamed: bool,
+    /// The annotated focus attribute of the field.
     attribute: FocusAttribute<'a>,
 }
 
 impl<'a> FocusField<'a> {
+    /// Collect all fields annotated with `focus(enable...)` from a named fields list.
     fn collect_fields_named(fields_named: &'a syn::FieldsNamed) -> Vec<Self> {
         fields_named
             .named
             .iter()
             .enumerate()
-            .map(|(index, field)| FocusField::from_field_if_annotated(field, index))
-            .flatten()
+            .filter_map(|(index, field)| FocusField::from_field_if_annotated(field, index))
             .collect()
     }
 
+    /// Collect all fields annotated with `focus(enable...)` from an unnamed fields list.
     fn collect_fields_unnamed(fields_unnamed: &'a syn::FieldsUnnamed) -> Vec<Self> {
         fields_unnamed
             .unnamed
             .iter()
             .enumerate()
-            .map(|(index, field)| FocusField::from_field_if_annotated(field, index))
-            .flatten()
+            .filter_map(|(index, field)| FocusField::from_field_if_annotated(field, index))
             .collect()
     }
 
+    /// Returns a [`FocusField`](FocusField) representation of the given field if the field was annotated with `focus(enable...)`.
     fn from_field_if_annotated(field: &'a syn::Field, index: usize) -> Option<Self> {
         let attribute = FocusAttribute::extract_focus_attribute(&field.attrs);
         let index_literal = proc_macro2::Literal::usize_unsuffixed(index);
@@ -274,6 +329,7 @@ impl<'a> FocusField<'a> {
         })
     }
 
+    /// Build the token stream to add this field to a vector of the `focus` method of a struct.
     fn add_struct_field_to_vec(
         &self,
         vector_name: &proc_macro2::TokenStream,
@@ -295,6 +351,7 @@ impl<'a> FocusField<'a> {
         }
     }
 
+    /// Build the token stream to add this field to a vector of the `focus` method of an enum.
     fn add_enum_field_to_vec(
         &self,
         index: usize,
@@ -322,25 +379,30 @@ impl<'a> FocusField<'a> {
         }
     }
 
+    /// Return the ident of this field.
     fn ident(&self, with_self: bool) -> proc_macro2::TokenStream {
         if !with_self && self.unnamed {
             // TODO: clean up
             let tmp = syn::Ident::new(&format!("t_{}", self.ident), proc_macro2::Span::call_site());
             quote! {#tmp}
         } else {
-            self.ident.to_owned()
+            self.ident.clone()
         }
     }
 }
 
+/// The representation of the `focus(enable...)` attribute.
 #[derive(Debug)]
 enum FocusAttribute<'a> {
+    /// The `focus(enable)` annotation.
     Enable(&'a syn::Ident),
+    /// The `focus(enable = WITH)` annotation.
     EnableWith(&'a syn::Ident, proc_macro2::TokenStream),
     //Disable(&'a syn::Ident),
 }
 
 impl<'a> FocusAttribute<'a> {
+    /// Extract the [`FocusAttribute`](FocusAttribute) from the given slice of attributes if present.
     fn extract_focus_attribute(attrs: &'a [syn::Attribute]) -> Option<Self> {
         let attr: Option<(&syn::PathSegment, syn::MetaList)> = attrs
             .iter()
@@ -355,12 +417,11 @@ impl<'a> FocusAttribute<'a> {
                 (&attr.path, meta)
             })
             .map(|(path, meta)| (&path.segments, meta))
-            .flat_map(|(path, meta)| {
+            .find_map(|(path, meta)| {
                 path.iter()
                     .find(|s| s.ident == "focus")
                     .map(|path| (path, meta))
-            })
-            .next();
+            });
 
         attr.map(|(path, mut meta)| {
             if meta.nested.len() != 1 {
@@ -369,7 +430,8 @@ impl<'a> FocusAttribute<'a> {
 
             match meta.nested.pop().unwrap().into_value() {
                 syn::NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
-                    nv.path
+                    let _ = nv
+                        .path
                         .get_ident()
                         .filter(|ident| *ident == "enable")
                         .expect("Expected the ident `enable` inside the focus attribute.");
@@ -386,7 +448,8 @@ impl<'a> FocusAttribute<'a> {
                     }
                 }
                 syn::NestedMeta::Meta(syn::Meta::Path(p)) => {
-                    p.get_ident()
+                    let _ = p
+                        .get_ident()
                         .filter(|ident| *ident == "enable")
                         .expect("Expected the ident `enable` inside the focus attribute.");
 
@@ -399,6 +462,7 @@ impl<'a> FocusAttribute<'a> {
         })
     }
 
+    /// Builds the boolean expression if this [`FocusAttribute`](FocusAttribute) contains a path to a boolean method.
     fn to_boolean_expression(
         &self,
         field_index: usize,

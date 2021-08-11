@@ -5,7 +5,7 @@ edition = "2018"
 authors = ["Kaiden42 <gitlab@tinysn.com>"]
 description = "A proc-macro to derive a focus chain for Iced applications"
 license = "MIT"
-repositiory = "https://github.com/Kaiden42/iced_focus"
+repository = "https://github.com/Kaiden42/iced_focus"
 readme = "../README.md"
 keywords = ["gui", "ui", "graphics", "interface", "widgets", "focus"]
 
