@@ -1,6 +1,6 @@
 # iced_focus
 
-This crates adds a procedural macro to derive a focus chain for your application state. This allows the user of your `iced` application to swap the focus between the input fields of your user interface using `Tab` and `Shift+Tab`. The order of the focus chain will be derived of the oder of the fields of your state. The crate `iced_focus` serves as a workaround until iced provides it's own focusing.
+This crates adds a procedural macro to derive a focus chain for your application state. This allows the user of your `iced` application to swap the focus between the input fields of your user interface using `Tab` and `Shift+Tab`. The order of the focus chain will be derived of the order of the fields of your state. The crate `iced_focus` serves as a workaround until iced provides it's own focusing.
 
 
 ## How to use
