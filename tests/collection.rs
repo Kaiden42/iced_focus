@@ -9,5 +9,6 @@ fn tests() {
     t.pass("tests/06-enable-with.rs");
     t.pass("tests/07-vector.rs");
     t.pass("tests/08-array.rs");
-    t.pass("tests/09-complex.rs");
+    t.pass("tests/09-option.rs");
+    t.pass("tests/10-complex.rs");
 }
