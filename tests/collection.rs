@@ -11,4 +11,5 @@ fn tests() {
     t.pass("tests/08-array.rs");
     t.pass("tests/09-option.rs");
     t.pass("tests/10-complex.rs");
+    t.pass("tests/11-generics.rs");
 }

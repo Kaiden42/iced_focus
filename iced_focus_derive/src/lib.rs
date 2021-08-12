@@ -58,19 +58,22 @@ pub fn focus_derive(input: TokenStream) -> TokenStream {
 
 /// Implement the `Focus` trait for the given AST.
 fn impl_focus(ast: &syn::DeriveInput) -> TokenStream {
-    //println!("ast: {:#?}", ast);
-
     let ident = &ast.ident;
+    let generics = &ast.generics;
 
     match ast.data {
-        syn::Data::Struct(ref s) => impl_focus_struct(ident, s),
-        syn::Data::Enum(ref e) => impl_focus_enum(ident, e),
+        syn::Data::Struct(ref s) => impl_focus_struct(ident, generics, s),
+        syn::Data::Enum(ref e) => impl_focus_enum(ident, generics, e),
         syn::Data::Union(ref _u) => unimplemented!("Unions are currently not supported."),
     }
 }
 
 /// Implement the `Focus` trait for a struct.
-fn impl_focus_struct(ident: &syn::Ident, s: &syn::DataStruct) -> TokenStream {
+fn impl_focus_struct(
+    ident: &syn::Ident,
+    generics: &syn::Generics,
+    s: &syn::DataStruct,
+) -> TokenStream {
     //println!("struct: {:#?}", s);
 
     let fields = match s.fields {
@@ -82,17 +85,23 @@ fn impl_focus_struct(ident: &syn::Ident, s: &syn::DataStruct) -> TokenStream {
 
     //println!("fields: {:#?}", fields);
 
-    build_focus_trait_for_struct(ident, &fields)
+    build_focus_trait_for_struct(ident, generics, &fields)
 }
 
 /// Build the token stream of the trait implementation for a struct.
-fn build_focus_trait_for_struct<'a>(ident: &syn::Ident, fields: &[FocusField<'a>]) -> TokenStream {
+fn build_focus_trait_for_struct<'a>(
+    ident: &syn::Ident,
+    generics: &syn::Generics,
+    fields: &[FocusField<'a>],
+) -> TokenStream {
     let vector_name = quote! {fields};
     let focus_method_body = build_focus_method_body(0, &vector_name, fields, true);
     let has_focus_method_body = build_has_focus_method_body(fields, true);
 
+    let generic_idents = generic_idents(generics);
+
     let result = quote! {
-        impl iced_focus::Focus for #ident {
+        impl#generics iced_focus::Focus for #ident#generic_idents {
             fn focus(&mut self, direction: iced_focus::Direction) -> iced_focus::State {
                 #focus_method_body
             }
@@ -106,7 +115,7 @@ fn build_focus_trait_for_struct<'a>(ident: &syn::Ident, fields: &[FocusField<'a>
 }
 
 /// Implement the `Focus` trait for an enum.
-fn impl_focus_enum(ident: &syn::Ident, e: &syn::DataEnum) -> TokenStream {
+fn impl_focus_enum(ident: &syn::Ident, generics: &syn::Generics, e: &syn::DataEnum) -> TokenStream {
     //println!("enum: {:#?}", e);
 
     let variants = &e.variants;
@@ -147,8 +156,10 @@ fn impl_focus_enum(ident: &syn::Ident, e: &syn::DataEnum) -> TokenStream {
         })
         .collect();
 
+    let generic_idents = generic_idents(generics);
+
     let result = quote! {
-        impl iced_focus::Focus for #ident {
+        impl#generics iced_focus::Focus for #ident#generic_idents {
             fn focus(&mut self, direction: iced_focus::Direction) -> iced_focus::State {
                 #(#booleans)*
 
@@ -275,6 +286,34 @@ fn build_has_focus_method_body(
 
     quote! {
         #(#booleans #with_self#field_idents.has_focus() ||)* false
+    }
+}
+
+/// Extracts the idents of the annotated generics.
+fn generic_idents(generics: &syn::Generics) -> proc_macro2::TokenStream {
+    let generics: Vec<proc_macro2::TokenStream> = generics
+        .params
+        .iter()
+        .map(|param| match param {
+            syn::GenericParam::Type(ty) => {
+                let ident = &ty.ident;
+                quote! { #ident }
+            }
+            syn::GenericParam::Lifetime(lifetime) => {
+                let lifetime = &lifetime.lifetime;
+                quote! { #lifetime }
+            }
+            syn::GenericParam::Const(con) => {
+                let ident = &con.ident;
+                quote! { #ident }
+            }
+        })
+        .collect();
+
+    if generics.is_empty() {
+        quote! {}
+    } else {
+        quote! { <#(#generics,)*> }
     }
 }
 
