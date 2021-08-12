@@ -251,7 +251,6 @@ fn build_focus_method_body<'a>(
     };
 
     quote! {
-        let mut #vector_name: std::vec::Vec<&mut dyn iced_focus::Focus> = std::vec::Vec::with_capacity(#capacity);
         let mut #vector_name: std::vec::Vec<Box<&mut dyn iced_focus::Focus>> = std::vec::Vec::with_capacity(#capacity);
 
         #(#booleans)*
