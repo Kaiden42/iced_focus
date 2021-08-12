@@ -451,17 +451,12 @@ impl<'a> FocusAttribute<'a> {
     fn extract_focus_attribute(attrs: &'a [syn::Attribute]) -> Option<Self> {
         let attr: Option<(&syn::PathSegment, syn::MetaList)> = attrs
             .iter()
-            .map(|attr| {
-                let meta = match attr.parse_meta() {
-                    Ok(syn::Meta::List(meta)) => meta,
-                    Ok(_) | Err(_) => panic!(
-                        "Expected a meta list like `focus(enable ...)` for the focus attribute."
-                    ),
-                };
-
-                (&attr.path, meta)
+            .filter_map(|attr| {
+                match attr.parse_meta() {
+                    Ok(syn::Meta::List(meta)) => Some((&attr.path.segments, meta)),
+                    Ok(_) | Err(_) => None,
+                }
             })
-            .map(|(path, meta)| (&path.segments, meta))
             .find_map(|(path, meta)| {
                 path.iter()
                     .find(|s| s.ident == "focus")
