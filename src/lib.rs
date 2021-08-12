@@ -53,16 +53,12 @@ extern crate iced_focus_derive;
 #[doc(hidden)]
 pub use iced_focus_derive::*;
 
-/// This trait specifies an element in the applications state that can be addet to the focus chain.
+/// This trait specifies an element in the applications state that can be added to the focus chain.
 pub trait Focus {
     /// Request a focus for the given direction.    
     fn focus(&mut self, direction: Direction) -> State;
     /// True, if this element has the focus.
     fn has_focus(&self) -> bool;
-
-    // Ugly workaround... see: <https://stackoverflow.com/a/61654763>
-    //fn as_dyn(&self) -> &dyn Focus;
-    //fn as_dyn_mut(&mut self) -> &mut dyn Focus;
 }
 
 /// The state returned by the focus request on a focusable element.
@@ -177,13 +173,6 @@ impl<T: Focus> Focus for [T] {
             }
             .unwrap_or(State::Returned)
         } else {
-            //let beginning = match direction {
-            //    Direction::Forwards => 0,
-            //    Direction::Backwards => self.len() - 1,
-            //};
-            //self.get_mut(beginning)
-            //    .map_or(State::Ignored, |element| element.focus(direction))
-
             // TODO: Clean up
             match direction {
                 Direction::Forwards => self[..].iter_mut().find_map(|e| match e.focus(direction) {
@@ -223,12 +212,10 @@ impl<T: Focus> Focus for Option<T> {
 /// See: <https://users.rust-lang.org/t/why-does-dyn-trait-not-implement-trait/30052>
 impl Focus for Option<&mut dyn Focus> {
     fn focus(&mut self, direction: Direction) -> State {
-        //self.as_mut().focus(direction)
         self.as_mut().map_or(State::Ignored, |t| t.focus(direction))
     }
 
     fn has_focus(&self) -> bool {
-        //self.as_ref().has_focus()
         self.as_ref().map_or(false, |t| t.has_focus())
     }
 }

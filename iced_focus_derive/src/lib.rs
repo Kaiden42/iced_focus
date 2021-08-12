@@ -74,21 +74,16 @@ fn impl_focus_struct(
     generics: &syn::Generics,
     s: &syn::DataStruct,
 ) -> TokenStream {
-    //println!("struct: {:#?}", s);
-
     let (fields, len) = match s.fields {
         syn::Fields::Named(ref named) => {
             (FocusField::collect_fields_named(named), named.named.len())
         }
-        //syn::Fields::Unnamed(_) => unimplemented!("Unnamed fields are currently not supported."),
         syn::Fields::Unnamed(ref unnamed) => (
             FocusField::collect_fields_unnamed(unnamed),
             unnamed.unnamed.len(),
         ),
         syn::Fields::Unit => unimplemented!("Unit structs are currently not supported."),
     };
-
-    //println!("fields: {:#?}", fields);
 
     build_focus_trait_for_struct(ident, generics, &fields, len)
 }
@@ -122,8 +117,6 @@ fn build_focus_trait_for_struct<'a>(
 
 /// Implement the `Focus` trait for an enum.
 fn impl_focus_enum(ident: &syn::Ident, generics: &syn::Generics, e: &syn::DataEnum) -> TokenStream {
-    //println!("enum: {:#?}", e);
-
     let variants = &e.variants;
 
     let method_bodies: Vec<(proc_macro2::TokenStream, proc_macro2::TokenStream)> = variants
@@ -381,28 +374,6 @@ impl<'a> FocusField<'a> {
         })
     }
 
-    /// Build the token stream to add this field to a vector of the `focus` method of a struct.
-    fn _add_struct_field_to_vec(
-        &self,
-        vector_name: &proc_macro2::TokenStream,
-    ) -> proc_macro2::TokenStream {
-        let ident = self.ident(true);
-        match self.attribute {
-            FocusAttribute::Enable(_) => quote! {
-                #vector_name.push(Box::new(&mut self.#ident));
-            },
-            FocusAttribute::EnableWith(_, _) => {
-                let boolean =
-                    syn::Ident::new(&format!("b_{}", self.index), proc_macro2::Span::call_site());
-                quote! {
-                    if #boolean {
-                        #vector_name.push(Box::new(&mut self.#ident));
-                    }
-                }
-            }
-        }
-    }
-
     /// TODO
     fn add_struct_field_to_array(
         &self,
@@ -420,34 +391,6 @@ impl<'a> FocusField<'a> {
                 quote! {
                     if #boolean {
                         #array_name[#index] = Some(&mut self.#ident);
-                    }
-                }
-            }
-        }
-    }
-
-    /// Build the token stream to add this field to a vector of the `focus` method of an enum.
-    fn _add_enum_field_to_vec(
-        &self,
-        index: usize,
-        vector_name: &proc_macro2::TokenStream,
-    ) -> proc_macro2::TokenStream {
-        let ident = self.ident(false);
-        //quote! {
-        //    #vector_name.push(#ident);
-        //}
-        match self.attribute {
-            FocusAttribute::Enable(_) => quote! {
-                #vector_name.push(Box::new(#ident));
-            },
-            FocusAttribute::EnableWith(_, _) => {
-                let boolean = syn::Ident::new(
-                    &format!("b_{}_{}", index, self.index),
-                    proc_macro2::Span::call_site(),
-                );
-                quote! {
-                    if #boolean {
-                        #vector_name.push(Box::new(#ident));
                     }
                 }
             }
