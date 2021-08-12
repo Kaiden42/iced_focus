@@ -175,15 +175,32 @@ impl<T: Focus> Focus for [T] {
                         })
                 }
             }
-            .unwrap_or(State::Ignored)
+            .unwrap_or(State::Returned)
         } else {
-            let beginning = match direction {
-                Direction::Forwards => 0,
-                Direction::Backwards => self.len() - 1,
-            };
+            //let beginning = match direction {
+            //    Direction::Forwards => 0,
+            //    Direction::Backwards => self.len() - 1,
+            //};
+            //self.get_mut(beginning)
+            //    .map_or(State::Ignored, |element| element.focus(direction))
 
-            self.get_mut(beginning)
-                .map_or(State::Ignored, |element| element.focus(direction))
+            // TODO: Clean up
+            match direction {
+                Direction::Forwards => self[..].iter_mut().find_map(|e| match e.focus(direction) {
+                    State::Kept => Some(State::Kept),
+                    State::Returned | State::Ignored => None,
+                }),
+                Direction::Backwards => {
+                    self[..]
+                        .iter_mut()
+                        .rev()
+                        .find_map(|e| match e.focus(direction) {
+                            State::Kept => Some(State::Kept),
+                            State::Returned | State::Ignored => None,
+                        })
+                }
+            }
+            .unwrap_or(State::Ignored)
         }
     }
 
@@ -198,6 +215,20 @@ impl<T: Focus> Focus for Option<T> {
     }
 
     fn has_focus(&self) -> bool {
+        self.as_ref().map_or(false, |t| t.has_focus())
+    }
+}
+
+/// Ugly workaround.
+/// See: <https://users.rust-lang.org/t/why-does-dyn-trait-not-implement-trait/30052>
+impl Focus for Option<&mut dyn Focus> {
+    fn focus(&mut self, direction: Direction) -> State {
+        //self.as_mut().focus(direction)
+        self.as_mut().map_or(State::Ignored, |t| t.focus(direction))
+    }
+
+    fn has_focus(&self) -> bool {
+        //self.as_ref().has_focus()
         self.as_ref().map_or(false, |t| t.has_focus())
     }
 }

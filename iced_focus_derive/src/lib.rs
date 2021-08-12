@@ -76,16 +76,21 @@ fn impl_focus_struct(
 ) -> TokenStream {
     //println!("struct: {:#?}", s);
 
-    let fields = match s.fields {
-        syn::Fields::Named(ref named) => FocusField::collect_fields_named(named),
+    let (fields, len) = match s.fields {
+        syn::Fields::Named(ref named) => {
+            (FocusField::collect_fields_named(named), named.named.len())
+        }
         //syn::Fields::Unnamed(_) => unimplemented!("Unnamed fields are currently not supported."),
-        syn::Fields::Unnamed(ref unnamed) => FocusField::collect_fields_unnamed(unnamed),
+        syn::Fields::Unnamed(ref unnamed) => (
+            FocusField::collect_fields_unnamed(unnamed),
+            unnamed.unnamed.len(),
+        ),
         syn::Fields::Unit => unimplemented!("Unit structs are currently not supported."),
     };
 
     //println!("fields: {:#?}", fields);
 
-    build_focus_trait_for_struct(ident, generics, &fields)
+    build_focus_trait_for_struct(ident, generics, &fields, len)
 }
 
 /// Build the token stream of the trait implementation for a struct.
@@ -93,9 +98,10 @@ fn build_focus_trait_for_struct<'a>(
     ident: &syn::Ident,
     generics: &syn::Generics,
     fields: &[FocusField<'a>],
+    len: usize,
 ) -> TokenStream {
-    let vector_name = quote! {fields};
-    let focus_method_body = build_focus_method_body(0, &vector_name, fields, true);
+    let array_name = quote! {fields};
+    let focus_method_body = build_focus_method_body(0, &array_name, fields, len, true);
     let has_focus_method_body = build_has_focus_method_body(fields, true);
 
     let generic_idents = generic_idents(generics);
@@ -184,17 +190,22 @@ fn impl_focus_enum_variant(
     variant: &syn::Variant,
 ) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
     let ident = &variant.ident;
-    let vector_name = quote! {fields};
+    let array_name = quote! {fields};
 
-    let fields = match variant.fields {
-        syn::Fields::Named(ref named) => FocusField::collect_fields_named(named),
-        syn::Fields::Unnamed(ref unnamed) => FocusField::collect_fields_unnamed(unnamed),
-        syn::Fields::Unit => Vec::new(),
+    let (fields, len) = match variant.fields {
+        syn::Fields::Named(ref named) => {
+            (FocusField::collect_fields_named(named), named.named.len())
+        }
+        syn::Fields::Unnamed(ref unnamed) => (
+            FocusField::collect_fields_unnamed(unnamed),
+            unnamed.unnamed.len(),
+        ),
+        syn::Fields::Unit => (Vec::new(), 0),
     };
 
     let field_idents: Vec<proc_macro2::TokenStream> =
         fields.iter().map(|field| field.ident(false)).collect();
-    let focus_method_body = build_focus_method_body(index, &vector_name, &fields, false);
+    let focus_method_body = build_focus_method_body(index, &array_name, &fields, len, false);
     let has_focus_method_body = build_has_focus_method_body(&fields, false);
 
     let variant_fields = match variant.fields {
@@ -226,18 +237,19 @@ fn impl_focus_enum_variant(
 /// Build the `focus(&mut self, iced_focus::Direction) -> iced_focus::State` method of the `Focus` trait.
 fn build_focus_method_body<'a>(
     index: usize,
-    vector_name: &proc_macro2::TokenStream,
+    array_name: &proc_macro2::TokenStream,
     fields: &[FocusField<'a>],
+    len: usize,
     with_self: bool,
 ) -> proc_macro2::TokenStream {
-    let capacity = fields.len();
+    //let _capacity = fields.len();
     let field_to_vector: Vec<proc_macro2::TokenStream> = fields
         .iter()
         .map(|field| {
             if with_self {
-                field.add_struct_field_to_vec(vector_name)
+                field.add_struct_field_to_array(array_name)
             } else {
-                field.add_enum_field_to_vec(index, vector_name)
+                field.add_enum_field_to_array(index, array_name)
             }
         })
         .collect();
@@ -250,14 +262,16 @@ fn build_focus_method_body<'a>(
         Vec::new()
     };
 
+    let array_init = std::iter::repeat(quote! { None }).take(len);
+
     quote! {
-        let mut #vector_name: std::vec::Vec<Box<&mut dyn iced_focus::Focus>> = std::vec::Vec::with_capacity(#capacity);
+        let mut #array_name: [Option<&mut dyn iced_focus::Focus>; #len] = [#(#array_init,)*];
 
         #(#booleans)*
 
         #(#field_to_vector)*
 
-        #vector_name.focus(direction)
+        #array_name.focus(direction)
     }
 }
 
@@ -368,7 +382,7 @@ impl<'a> FocusField<'a> {
     }
 
     /// Build the token stream to add this field to a vector of the `focus` method of a struct.
-    fn add_struct_field_to_vec(
+    fn _add_struct_field_to_vec(
         &self,
         vector_name: &proc_macro2::TokenStream,
     ) -> proc_macro2::TokenStream {
@@ -389,8 +403,31 @@ impl<'a> FocusField<'a> {
         }
     }
 
+    /// TODO
+    fn add_struct_field_to_array(
+        &self,
+        array_name: &proc_macro2::TokenStream,
+    ) -> proc_macro2::TokenStream {
+        let ident = self.ident(true);
+        let index = self.index;
+        match self.attribute {
+            FocusAttribute::Enable(_) => quote! {
+                #array_name[#index] = Some(&mut self.#ident);
+            },
+            FocusAttribute::EnableWith(_, _) => {
+                let boolean =
+                    syn::Ident::new(&format!("b_{}", self.index), proc_macro2::Span::call_site());
+                quote! {
+                    if #boolean {
+                        #array_name[#index] = Some(&mut self.#ident);
+                    }
+                }
+            }
+        }
+    }
+
     /// Build the token stream to add this field to a vector of the `focus` method of an enum.
-    fn add_enum_field_to_vec(
+    fn _add_enum_field_to_vec(
         &self,
         index: usize,
         vector_name: &proc_macro2::TokenStream,
@@ -411,6 +448,33 @@ impl<'a> FocusField<'a> {
                 quote! {
                     if #boolean {
                         #vector_name.push(Box::new(#ident));
+                    }
+                }
+            }
+        }
+    }
+
+    /// TODO
+    fn add_enum_field_to_array(
+        &self,
+        index: usize,
+        array_name: &proc_macro2::TokenStream,
+    ) -> proc_macro2::TokenStream {
+        let ident = self.ident(false);
+        let field_index = self.index;
+
+        match self.attribute {
+            FocusAttribute::Enable(_) => quote! {
+                #array_name[#field_index] = Some(#ident);
+            },
+            FocusAttribute::EnableWith(_, _) => {
+                let boolean = syn::Ident::new(
+                    &format!("b_{}_{}", index, self.index),
+                    proc_macro2::Span::call_site(),
+                );
+                quote! {
+                    if #boolean {
+                        #array_name[#field_index] = Some(#ident);
                     }
                 }
             }
