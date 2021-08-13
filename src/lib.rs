@@ -116,6 +116,16 @@ where
     }
 }
 
+impl<T: Focus> Focus for Box<T> {
+    fn focus(&mut self, direction: Direction) -> State {
+        self.as_mut().focus(direction)
+    }
+
+    fn has_focus(&self) -> bool {
+        self.as_ref().has_focus()
+    }
+}
+
 /// Ugly workaround.
 /// See: <https://users.rust-lang.org/t/why-does-dyn-trait-not-implement-trait/30052>
 impl Focus for Box<&mut dyn Focus> {
