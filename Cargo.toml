@@ -1,6 +1,6 @@
 [package]
 name = "iced_focus"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2018"
 authors = ["Kaiden42 <gitlab@tinysn.com>"]
 description = "A proc-macro to derive a focus chain for Iced applications"
@@ -15,7 +15,7 @@ path = "tests/collection.rs"
 
 [dependencies]
 iced = "0.3.0"
-iced_focus_derive = { path = "./iced_focus_derive", version = "0.1.0", optional = true }
+iced_focus_derive = { path = "./iced_focus_derive", version = "0.1.1", optional = true }
 
 [dev-dependencies]
 trybuild = "1.0.43"

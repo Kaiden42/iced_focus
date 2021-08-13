@@ -1,6 +1,6 @@
 [package]
 name = "iced_focus_derive"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2018"
 authors = ["Kaiden42 <gitlab@tinysn.com>"]
 description = "A proc-macro to derive a focus chain for Iced applications"

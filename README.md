@@ -8,7 +8,7 @@ This crates adds a procedural macro to derive a focus chain for your application
 Add `iced_focus` to your dependencies:
 ```toml
 [dependencies]
-iced_focus = { version = "0.1.0", features = ["derive"] }
+iced_focus = { version = "0.1.1", features = ["derive"] }
 iced = "0.3.0"
 iced_native = "0.4.0"
 ```
